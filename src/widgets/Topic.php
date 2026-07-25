@@ -18,17 +18,17 @@ class Topic extends Widget
 {
     public $topics;
 
-    private function _getColor($item)
+    private function _getColor($item): string
     {
         $colors = [
-           'general'   => 'label-default',
-           'technical' => 'label-primary',
-           'vds'       => 'label-info',
-           'domain'    => 'label-success',
-           'financial' => 'label-warning',
+            'general' => 'label-default',
+            'technical' => 'label-primary',
+            'vds' => 'label-info',
+            'domain' => 'label-success',
+            'financial' => 'label-warning',
         ];
 
-        return $colors[$item] ?: reset($colors);
+        return $colors[$item] ?? $colors['general'];
     }
 
     public function run()
@@ -36,7 +36,7 @@ class Topic extends Widget
         if ($this->topics) {
             $html = '<ul class="list-inline">';
             foreach ($this->topics as $item => $label) {
-                $label = Yii::t('hipanel:ticket', $label);
+                $label = Yii::t('hipanel:ticket', Html::encode($label));
                 $html .= Html::tag('li', Html::tag('span', $label, ['class' => 'label ' . $this->_getColor($item)]));
             }
             $html .= '</ul>';

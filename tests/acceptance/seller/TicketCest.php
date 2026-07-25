@@ -10,17 +10,14 @@ use hipanel\tests\_support\Step\Acceptance\Seller;
 
 class TicketCest
 {
-    /**
-     * @var IndexPage
-     */
-    private $index;
+    private IndexPage $index;
 
-    public function _before(Seller $I)
+    public function _before(Seller $I): void
     {
         $this->index = new IndexPage($I);
     }
 
-    public function ensureIndexPageWorks(Seller $I)
+    public function ensureIndexPageWorks(Seller $I): void
     {
         $I->login();
         $I->needPage(Url::to('@ticket'));
@@ -30,21 +27,23 @@ class TicketCest
         $this->ensureICanSeeBulkSearchBox();
     }
 
-    private function ensureICanSeeAdvancedSearchBox(Seller $I)
+    private function ensureICanSeeAdvancedSearchBox(Seller $I): void
     {
         $this->index->containsFilters([
-            Input::asAdvancedSearch($I, 'Subject or message'),
+            Input::asAdvancedSearch($I, 'Subject or 1st message or ticket number'),
+            Input::asAdvancedSearch($I, 'Message'),
+            Input::asAdvancedSearch($I, 'Ticket numbers separated by commas'),
             Select2::asAdvancedSearch($I, 'Author'),
             Select2::asAdvancedSearch($I, 'Recipient'),
             Select2::asAdvancedSearch($I, 'Status'),
-            Select2::asAdvancedSearch($I, 'Assignee'),
+            Select2::asAdvancedSearch($I, 'Responsible'),
             Select2::asAdvancedSearch($I, 'Priority'),
             Select2::asAdvancedSearch($I, 'Watchers'),
             Select2::asAdvancedSearch($I, 'Topics'),
         ]);
     }
 
-    private function ensureICanSeeBulkSearchBox()
+    private function ensureICanSeeBulkSearchBox(): void
     {
         $this->index->containsBulkButtons([
             'Subscribe',
@@ -54,7 +53,7 @@ class TicketCest
         $this->index->containsColumns([
             'Subject',
             'Author',
-            'Assignee',
+            'Responsible',
             'Recipient',
             'Answers',
         ]);

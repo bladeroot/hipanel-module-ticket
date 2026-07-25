@@ -1,6 +1,7 @@
 <?php
 
 use hipanel\helpers\HtmlHelper;
+use hipanel\modules\client\models\Client;
 use hipanel\modules\ticket\models\Thread;
 use hipanel\modules\ticket\widgets\ConditionalFormWidget;
 use hipanel\widgets\Box;
@@ -8,16 +9,19 @@ use hipanel\widgets\Pjax;
 use hiqdev\assets\flagiconcss\FlagIconCssAsset;
 use hiqdev\yii2\reminder\widgets\ReminderButton;
 use yii\helpers\Html;
+use yii\web\View;
 
 /**
- * @var \yii\web\View
+ * @var View $this
  * @var Thread $model
  * @var string $action
+ * @var Client $client
  */
+
 FlagIconCssAsset::register($this);
 
 $form = ConditionalFormWidget::begin([
-    'form' => isset($form) ? $form : null,
+    'form' => $form ?? null,
     'options' => [
         'id' => 'left-block-comment-form',
         'action' => $action,
@@ -66,19 +70,19 @@ $form = ConditionalFormWidget::begin([
             ],
         ]) ?>
 
-        <?= $this->render('_advancedForm', compact('form', 'model', 'topic_data', 'state_data', 'priority_data')) ?>
+        <?= $this->render('_advancedForm', compact('form', 'model', 'topic_data', 'state_data', 'priority_data', 'action')) ?>
 
-        <?php if (!$model->isNewRecord && Yii::$app->user->can('support')) : ?>
+        <?php if (!$model->isNewRecord && Yii::$app->user->can('access-subclients')) : ?>
             <?php $box->beginFooter() ?>
-                <?= $this->render('_subscribeButton', compact('model')) ?>
+            <?= $this->render('_subscribeButton', compact('model')) ?>
             <?php $box->endFooter() ?>
         <?php endif ?>
 
         <?php $box->end() ?>
     </div>
 
-    <?php if ($client && Yii::$app->user->can('support') && Yii::$app->user->id != $client->id) : ?>
-        <?= $this->render('_clientInfo', compact('client')); ?>
+    <?php if (isset($client) && Yii::$app->user->can('access-subclients') && Yii::$app->user->id != $client->id) : ?>
+        <?= $this->render('_clientInfo', compact('client')) ?>
     <?php endif ?>
 </div>
 

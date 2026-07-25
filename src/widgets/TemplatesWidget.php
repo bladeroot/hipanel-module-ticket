@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 /**
  * HiPanel tickets module
  *
@@ -26,7 +26,7 @@ class TemplatesWidget extends Widget
 
     public function run()
     {
-        if (!Yii::$app->user->can('support')) {
+        if (!Yii::$app->user->can('ticket.read-templates')) {
             return null;
         }
         $this->formId = mt_rand();
@@ -86,20 +86,30 @@ class TemplatesWidget extends Widget
                 'lang' => new JsExpression('language'),
             ],
             'success' => new JsExpression("function (data) {
-                if (data.text) {
+                const exists = (attribute) => data.hasOwnProperty(attribute) && data[attribute] != null;
+                if ('text' in data && data.text) {
                     var messageText = $('#thread-message').val();
                     if (messageText.length > 0) {
                         messageText = messageText + ' ';
                     }
                     $('$this->textareaSelector').val(messageText + data.text).trigger('blur').focus();
                 }
+                if (exists('responsible')) {
+                    $('#thread-responsible').append(new Option(data.responsible, data.responsible, true, true)).trigger('change');
+                }
+                if (exists('priority')) {
+                    $('#thread-priority').val(data.priority).trigger('change');
+                }
+                if (exists('topics')) {
+                    $('#thread-topics').val(data.topics).trigger('change');
+                }
             }"),
         ]);
 
         $this->view->registerJs("
-            $('#{$this->formId}').on('select2:select', function (e) {
-                var id = $(e.target).val(),
-                    language = $('.selected-language').attr('data-language');
+            $('#$this->formId').on('select2:select', function (e) {
+                var id = $(e.target).val();
+                var language = $('.selected-language').attr('data-language');
 
                 $.ajax($options);
             });

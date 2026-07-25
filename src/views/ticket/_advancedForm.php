@@ -1,5 +1,6 @@
 <?php
 
+use hipanel\components\User;
 use hipanel\modules\client\widgets\combo\ClientCombo;
 use hipanel\modules\ticket\models\Thread;
 use hiqdev\combo\StaticCombo;
@@ -10,17 +11,20 @@ use yii\widgets\DetailView;
 
 /**
  * @var Thread $model
+ * @var User $user
  */
 
-$isSupport = Yii::$app->user->can('support');
+$user = Yii::$app->user->identity;
+$isSupport = Yii::$app->user->can('access-subclients') && !Yii::$app->user->identity->is('client');
+$isOwnerStaff = $isSupport && Yii::$app->user->can('owner-staff');
 $isNewRecord = $model->isNewRecord;
 
 if ($isNewRecord) {
     if ($isSupport) {
-        $model->priority = 'medium';
-        $model->responsible = Yii::$app->user->identity->login;
+        $model->priority = $model->priority ?? 'medium';
+        $model->responsible = $user->login;
     } else {
-        $model->recipient_id = Yii::$app->user->identity->id;
+        $model->recipient_id = $user->id;
     }
     $this->registerCss("
     .table.detail-view { table-layout: fixed; }
@@ -78,7 +82,7 @@ $this->registerCss(".table.detail-view { margin-bottom: 0px; }");
                     ],
                 ]),
             ] : null,
-            $isSupport ? [
+            $isOwnerStaff ? [
                 'attribute' => 'responsible',
                 'format' => 'raw',
                 'value' => $isNewRecord ? $form->field($model, 'responsible')->widget(ClientCombo::class, [
@@ -127,4 +131,5 @@ $this->registerCss(".table.detail-view { margin-bottom: 0px; }");
         ]),
     ]) ?>
 </div>
-<?php $form->end() ?>
+
+<?php ActiveForm::end() ?>

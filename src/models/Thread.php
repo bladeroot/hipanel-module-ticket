@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 /**
  * HiPanel tickets module
  *
@@ -13,6 +13,7 @@ namespace hipanel\modules\ticket\models;
 use hipanel\behaviors\File;
 use hipanel\helpers\Markdown;
 use hipanel\modules\client\models\Client;
+use hipanel\validators\FileValidator;
 use stdClass;
 use Yii;
 use yii\helpers\HtmlPurifier;
@@ -27,6 +28,9 @@ use yii\web\NotFoundHttpException;
 class Thread extends \hipanel\base\Model
 {
     use \hipanel\base\ModelTrait;
+    use ResponsibleTrait;
+
+    const DEFAULT_SHOW_ALL = 'all';
 
     public static $i18nDictionary = 'hipanel:ticket';
 
@@ -94,7 +98,8 @@ class Thread extends \hipanel\base\Model
             'responsible',
             'priority',
             'priority_label',
-            'spent', 'spent_hours',
+            'spent',
+            'spent_hours',
             'answer_count',
             'status',
             'reply_time',
@@ -119,12 +124,14 @@ class Thread extends \hipanel\base\Model
 
             'lastanswer',
             'time',
-            'add_watchers', 'del_watchers',
+            'add_watchers',
+            'del_watchers',
 
             'time_from',
             'time_till',
 
             'contact',
+            'spent_billable',
         ];
     }
 
@@ -133,14 +140,21 @@ class Thread extends \hipanel\base\Model
      */
     public function rules()
     {
-        $rules = [
+        return [
             [['author_id', 'responsible_id'], 'integer'],
             [['subject', 'message'], 'required', 'on' => ['create']],
+            [['spent_billable'], 'boolean', 'trueValue' => 1, 'falseValue' => 0],
             [['subject'], 'string', 'min' => 3],
             [['id'], 'required', 'on' => ['answer', 'update-answer', 'open', 'close']],
-            [['recipient_id'], 'required', 'when' => function () {
-                return Yii::$app->user->can('support');
-            }, 'on' => 'create'],
+            [['id', 'message', 'state'], 'required', 'on' => ['answer-and-close']],
+            [
+                ['recipient_id'],
+                'required',
+                'when' => function () {
+                    return Yii::$app->user->can('ticket.set-recipient');
+                },
+                'on' => 'create',
+            ],
             [
                 [
                     'topics',
@@ -149,7 +163,8 @@ class Thread extends \hipanel\base\Model
                     'responsible',
                     'recipient_id',
                     'watchers',
-                    'spent', 'spent_hours',
+                    'spent',
+                    'spent_hours',
                     'file_ids',
                 ],
                 'safe',
@@ -158,12 +173,19 @@ class Thread extends \hipanel\base\Model
             [
                 [
                     'message',
-                    'topics', 'state', 'priority',
-                    'responsible', 'recipient_id',
-                    'watchers', 'add_watchers', 'del_watchers', 'watcher_ids',
+                    'topics',
+                    'state',
+                    'priority',
+                    'responsible',
+                    'recipient_id',
+                    'watchers',
+                    'add_watchers',
+                    'del_watchers',
+                    'watcher_ids',
                     'is_private',
                     'file_ids',
-                    'spent', 'spent_hours',
+                    'spent',
+                    'spent_hours',
                 ],
                 'safe',
                 'on' => 'answer',
@@ -171,16 +193,20 @@ class Thread extends \hipanel\base\Model
             [['state'], 'safe', 'on' => ['close', 'open']],
             // only client-side validation. Answer is actually possible without a message,
             // but does not make any sense.
-            [['message'], 'required', 'on' => ['answer'], 'when' => function () {
-                return false;
-            }],
+            [
+                ['message'],
+                'required',
+                'on' => ['answer'],
+                'when' => function () {
+                    return false;
+                },
+            ],
+            [['state'], 'default', 'value' => self::DEFAULT_SHOW_ALL, 'on' => ['default']],
             [['id'], 'integer', 'on' => 'answer'],
-            [['file'], 'file', 'maxFiles' => 15],
+            [['file'], FileValidator::class, 'maxFiles' => 15],
             [['lastanswer', 'create_time', 'recipient'], 'safe'],
-            [['author', 'author_seller'], 'safe', 'when' => Yii::$app->user->can('support')],
+            [['author', 'author_seller'], 'safe', 'when' => Yii::$app->user->can('access-subclients')],
         ];
-
-        return $rules;
     }
 
     /**
@@ -193,8 +219,8 @@ class Thread extends \hipanel\base\Model
             'author_id' => Yii::t('hipanel:ticket', 'Author'),
             'recipient' => Yii::t('hipanel:ticket', 'Recipient'),
             'is_private' => Yii::t('hipanel:ticket', 'Make private'),
-            'responsible' => Yii::t('hipanel:ticket', 'Assignee'),
-            'responsible_id' => Yii::t('hipanel:ticket', 'Assignee'),
+            'responsible' => Yii::t('hipanel:ticket', 'Responsible'),
+            'responsible_id' => Yii::t('hipanel:ticket', 'Responsible'),
             'spent' => Yii::t('hipanel:ticket', 'Spent time'),
             'create_time' => Yii::t('hipanel:ticket', 'Created'),
             'a_reply_time' => Yii::t('hipanel:ticket', 'a_reply_time'),
@@ -202,6 +228,7 @@ class Thread extends \hipanel\base\Model
             'lastanswer' => Yii::t('hipanel:ticket', 'Last answer'),
             'author_seller' => Yii::t('hipanel:ticket', 'Seller'),
             'watcher_ids' => Yii::t('hipanel:ticket', 'Watchers'),
+            'spent_billable' => Yii::t('hipanel:ticket', 'Is billable?'),
         ]);
     }
 
@@ -225,7 +252,7 @@ class Thread extends \hipanel\base\Model
         return $this->author_seller_id;
     }
 
-    public function getThreadUrl()
+    public function getThreadUrlArray()
     {
         return ['@ticket/view', 'id' => $this->id];
     }
@@ -245,7 +272,9 @@ class Thread extends \hipanel\base\Model
 
     public function prepareSpentTime()
     {
-        list($this->spent_hours, $this->spent) = explode(':', $this->spent, 2);
+        if (!empty($this->spent)) {
+            [$this->spent_hours, $this->spent] = explode(':', $this->spent, 2);
+        }
     }
 
     public function prepareTopic()
@@ -257,7 +286,7 @@ class Thread extends \hipanel\base\Model
     {
         $results = [];
         foreach ((array)$this->watchers as $id => $watcher) {
-            list($login, $email) = explode(' ', $watcher);
+            [$login, $email] = explode(' ', $watcher);
             $results[$id] = $login;
         }
 
@@ -284,20 +313,10 @@ class Thread extends \hipanel\base\Model
     }
 
     /**
-     * Returns array of client types, that can be set as responsible for the thread.
-     *
-     * @return array
-     */
-    public static function getResponsibleClientTypes()
-    {
-        return [Client::TYPE_SELLER, Client::TYPE_ADMIN, Client::TYPE_MANAGER, Client::TYPE_OWNER];
-    }
-
-    /**
      * @param integer $id
      * @param bool $throwOnError whether to throw an exception when answer is not found in thread
-     * @throws NotFoundHttpException
      * @return Answer
+     * @throws NotFoundHttpException
      */
     public function getAnswer($id, $throwOnError = true)
     {
@@ -336,7 +355,7 @@ class Thread extends \hipanel\base\Model
 
     public function isOpen()
     {
-        return $this->state === self::STATE_OPEN;
+        return $this->state && $this->state !== self::STATE_CLOSE;
     }
 
     public function isHighPriority(): bool

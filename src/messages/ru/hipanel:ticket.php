@@ -9,7 +9,7 @@
  */
 
 return [
-    'Subject or message' => 'Тема или сообщение',
+    'Subject or 1st message' => 'Тема или первое сообщение',
     'Author' => 'Автор',
     'Help' => 'Помощь',
     'Support' => 'Поддержка',
@@ -19,6 +19,8 @@ return [
     'Make private' => 'Сделать личным',
     'Assignee' => 'Исполнитель',
     'Assignee ID' => 'ID исполнителя',
+    'Responsible' => 'Ответственный',
+    'Executor' => 'Исполнитель',
     'You assigned' => 'Вы исполнитель',
     'Spent time' => 'Затраченное время',
     'Spent hours' => 'Затраченные часы',
@@ -108,7 +110,7 @@ return [
     'When checked, mail notification includes the text of the new message. By default, the mail has only the acknowledgment of the response and a link to the ticket. Be careful, the text can include confidential information.' => 'Когда отмечено, почтовые уведомления об ответах будут включать в себя текст сообщения. По умолчанию, в письме приходит только упоминание о новом ответе и ссылка на тикет. Будьте внимательны, текст сообщения может содержать конфиденциальную информацию.',
     'In this field you can specify to receive email notifications of ticket. By default, the notification is used for editing the main e-mail' => 'В этом поле вы можете указать получить уведомления по электронной почте о тикете. По умолчанию, уведомление используется для редактирования основной электронной почты',
 
-    /// AdvancedHosters ticket types
+    /// Ticket types
     'Technical' => 'Технический',
     'Administrative' => 'Административный',
     'Financial' => 'Финансовый',
@@ -119,13 +121,13 @@ return [
     'Software ticket' => 'Софт',
     'Networking ticket' => 'Сетевой',
 
-    /// AdvandedHosters ticket priorities
+    /// Ticket priorities
     'low priority' => 'низкий приоритет',
     'Medium priority' => 'Средний приоритет',
     'High Priority' => 'Высокий приоритет',
     'ULTRAHIGH PRIORITY' => '',
 
-    /// AHnames ticket types
+    /// Ticket types
     'General question' => 'Общий вопрос',
     'Financial question' => 'Финансовый',
     'Technical question' => 'Технический',
@@ -145,5 +147,7 @@ return [
     '{d, plural, =0{ } one{# day} other{# days}} {h}:{m}' => '{d, plural, =0{ } one{# день} few{# день} other{# дней}} {h}:{m}',
 
     'Are you sure you want to close these tickets?' => 'Вы действительно хотите закрыть эти тикеты?',
-    'Ticket numbers separated by commas' => 'Номера тикитов, разделенные запятыми',
+    'Ticket numbers separated by commas' => 'Номера тикетов, разделенные запятыми',
+    'Hide payment tickets' => 'Скрыть напоминания о оплате',
+    'Is billable?' => 'Билится?',
 ];

@@ -43,6 +43,16 @@ class StatisticGridView extends \hipanel\grid\BoxedGridView
                     ]);
                 },
             ],
+            'threads_num' => [
+                'label' => Yii::t('hipanel:ticket', 'Threads'),
+                'contentOptions' => ['class' => 'text-right'],
+                'filter' => false,
+            ],
+            'answers_num' => [
+                'label' => Yii::t('hipanel:ticket', 'Answers'),
+                'contentOptions' => ['class' => 'text-right'],
+                'filter' => false,
+            ],
             'tickets' => [
                 'format' => 'html',
                 'label' => Yii::t('hipanel:ticket', 'Tickets'),

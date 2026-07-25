@@ -21,6 +21,7 @@ use Yii;
 class Answer extends \hipanel\base\Model
 {
     use \hipanel\base\ModelTrait;
+    use ResponsibleTrait;
 
     public static $i18nDictionary = 'hipanel:ticket';
 
@@ -97,6 +98,10 @@ class Answer extends \hipanel\base\Model
             'is_moved',
             'ip',
             'file',
+            'spent_billable',
+            'responsible',
+            'responsible_id',
+            'topics',
         ];
     }
 
@@ -107,10 +112,11 @@ class Answer extends \hipanel\base\Model
     {
         return [
             [
-                ['id', 'answer_id', 'spent', 'spent_hours'],
+                ['id', 'answer_id', 'spent', 'spent_hours', 'responsible_id'],
                 'integer',
                 'enableClientValidation' => false,
             ],
+            [['spent_billable'], 'boolean'],
             [
                 ['message', 'id', 'answer_id'],
                 'required',
@@ -126,9 +132,11 @@ class Answer extends \hipanel\base\Model
                 'boolean',
                 'on' => 'update',
                 'when' => function () {
-                    return Yii::$app->user->can('support');
+                    return Yii::$app->user->can('ticket.set-private');
                 },
             ],
+            [['spent_billable'], 'boolean', 'on' => ['update', 'create']],
+            [['responsible', 'topics'], 'safe'],
         ];
     }
 
@@ -150,6 +158,7 @@ class Answer extends \hipanel\base\Model
             'file' => Yii::t('hipanel:ticket', 'Files'),
             'lastanswer' => Yii::t('hipanel:ticket', 'Last answer'),
             'author_seller' => Yii::t('hipanel:ticket', 'Seller'),
+            'spent_billable' => Yii::t('hipanel:ticket', 'Is billable?'),
         ]);
     }
 
@@ -175,7 +184,12 @@ class Answer extends \hipanel\base\Model
 
     public function prepareSpentTime()
     {
-        list($this->spent_hours, $this->spent) = explode(':', $this->spent, 2);
+        if (strpos($this->spent ?? '', ':') !== false) {
+            list($this->spent_hours, $this->spent) = explode(':', $this->spent ?? '' , 2);
+        } else {
+            $this->spent_hours = 0;
+            $this->spent = 0;
+        }
     }
 
     public function getThread()

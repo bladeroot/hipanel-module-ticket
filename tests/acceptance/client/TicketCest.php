@@ -4,6 +4,7 @@ namespace hipanel\modules\ticket\tests\acceptance\client;
 
 use Codeception\Scenario;
 use hipanel\helpers\Url;
+use Codeception\Example;
 use hipanel\modules\ticket\tests\_support\Page\ticket\Create;
 use hipanel\modules\ticket\tests\_support\Page\ticket\Index;
 use hipanel\modules\ticket\tests\_support\Page\ticket\View;
@@ -24,17 +25,14 @@ class TicketCest
      */
     protected $ticket_id;
 
-    /**
-     * @var IndexPage
-     */
-    private $index;
+    private IndexPage $index;
 
-    public function _before(Client $I)
+    public function _before(Client $I): void
     {
         $this->index = new IndexPage($I);
     }
 
-    public function ensureIndexPageWorks(Client $I)
+    public function ensureIndexPageWorks(Client $I): void
     {
         $I->login();
         $I->needPage(Url::to('@ticket'));
@@ -45,16 +43,16 @@ class TicketCest
         (new Index($I))->ensurePageWorks();
     }
 
-    private function ensureICanSeeAdvancedSearchBox(Client $I)
+    private function ensureICanSeeAdvancedSearchBox(Client $I): void
     {
         $this->index->containsFilters([
-            Input::asAdvancedSearch($I, 'Subject or message'),
+            Input::asAdvancedSearch($I, 'Subject or 1st message or ticket number'),
             Select2::asAdvancedSearch($I, 'Status'),
             Select2::asAdvancedSearch($I, 'Topics'),
         ]);
     }
 
-    private function ensureICanSeeBulkSearchBox()
+    private function ensureICanSeeBulkSearchBox(): void
     {
         $this->index->containsBulkButtons([
             'Close',
@@ -65,21 +63,21 @@ class TicketCest
         ]);
     }
 
-    public function ensureICanNavigateToCreateTicketPage(Client $I)
+    public function ensureICanNavigateToCreateTicketPage(Client $I): void
     {
         (new Index($I))->ensureThatICanNavigateToCreateTicketPage();
     }
 
-    public function ensureICanCreateTicket(Client $I)
+    /**
+     * @dataProvider provideDataTicket
+     */
+    public function ensureICanCreateTicket(Client $I, Example $example): void
     {
-        $this->ticket_id = (new Create($I))->createTicket(
-            'Test ticket (' . date('Y-m-d H:i') . ')',
-            'This is a test ticket created by automated testing system. Ignore it, please.',
-            'VDS'
-        );
+        $ticketData = iterator_to_array($example->getIterator());
+        $this->ticket_id = (new Create($I))->createTicket($ticketData);
     }
 
-    public function ensureISeeCreatedTicketOnIndexPage(Client $I, Scenario $scenario)
+    public function ensureISeeCreatedTicketOnIndexPage(Client $I, Scenario $scenario): void
     {
         if (!isset($this->ticket_id)) {
             $scenario->incomplete('Ticket ID must be filled to run this test');
@@ -89,7 +87,7 @@ class TicketCest
         $index->hasLinkToTicket($this->ticket_id);
     }
 
-    public function ensureICanCommentTicket(Client $I, Scenario $scenario)
+    public function ensureICanCommentTicket(Client $I, Scenario $scenario): void
     {
         if (!isset($this->ticket_id)) {
             $scenario->incomplete('Ticket ID must be filled to run this test');
@@ -100,7 +98,7 @@ class TicketCest
         $view->postComment('This is a test comment. Ignore it, please.');
     }
 
-    public function ensureICanChangeTicketState(Client $I, Scenario $scenario)
+    public function ensureICanChangeTicketState(Client $I, Scenario $scenario): void
     {
         if (!isset($this->ticket_id)) {
             $scenario->incomplete('Ticket ID must be filled to run this test');
@@ -112,10 +110,21 @@ class TicketCest
 
         $I->openNewTab();
         $index = new Index($I);
-        $index->hasntLinkToTicket($this->ticket_id);
+        $index->ensureTicketClosed($this->ticket_id);
         $I->closeTab();
 
         $view->openTicket();
         $view->closeTicket();
+    }
+
+    protected function provideDataTicket(): array
+    {
+        return [
+            'ticket' => [
+                'subject' => 'Test ticket (' . date('Y-m-d H:i') . ')',
+                'message' => 'This is a test ticket created by automated testing system. Ignore it, please.',
+                'topic' => 'VDS',
+            ],
+        ];
     }
 }

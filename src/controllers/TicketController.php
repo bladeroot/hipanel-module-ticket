@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 /**
  * HiPanel tickets module
  *
@@ -10,6 +10,7 @@
 
 namespace hipanel\modules\ticket\controllers;
 
+use Exception;
 use hipanel\actions\Action;
 use hipanel\actions\IndexAction;
 use hipanel\actions\PrepareAjaxViewAction;
@@ -25,23 +26,32 @@ use hipanel\actions\ViewAction;
 use hipanel\filters\EasyAccessControl;
 use hipanel\modules\client\models\Client;
 use hipanel\modules\client\models\stub\ClientRelationFreeStub;
-use hipanel\modules\server\models\Server;
 use hipanel\modules\ticket\models\Thread;
 use hipanel\modules\ticket\models\ThreadSearch;
 use hipanel\modules\ticket\models\TicketSettings;
 use hiqdev\hiart\ResponseErrorException;
 use Yii;
 use yii\base\Event;
+use yii\bootstrap\ActiveForm;
 use yii\filters\PageCache;
 use yii\helpers\ArrayHelper;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
+use yii\web\Session;
 
 /**
  * Class TicketController.
  */
 class TicketController extends \hipanel\base\CrudController
 {
+    private Session $session;
+
+    public function __construct($id, $module, Session $session, array $config = [])
+    {
+        parent::__construct($id, $module, $config);
+        $this->session = $session;
+    }
+
     /**
      * Used to create newModel.
      * @return string
@@ -65,10 +75,10 @@ class TicketController extends \hipanel\base\CrudController
             [
                 'class' => EasyAccessControl::class,
                 'actions' => [
-                    'create'    => 'ticket.create',
-                    'answer'    => 'ticket.answer',
-                    'delete'    => 'ticket.delete',
-                    '*'         => 'ticket.read',
+                    'create' => 'ticket.create',
+                    'answer' => 'ticket.answer',
+                    'delete' => 'ticket.delete',
+                    '*' => 'ticket.read',
                 ],
             ],
         ]);
@@ -97,10 +107,10 @@ class TicketController extends \hipanel\base\CrudController
                     $ticket = $action->model;
 
                     $attributes = [
-                        'id' => $ticket->recipient_id,
-                        'login' => $ticket->recipient,
-                        'seller' => $ticket->recipient_seller,
-                        'seller_id' => $ticket->recipient_seller_id,
+                        'id' => $ticket->recipient_id ?? $ticket->author_id,
+                        'login' => $ticket->recipient ?? $ticket->author,
+                        'seller' => $ticket->recipient_seller ?? $ticket->author_seller,
+                        'seller_id' => $ticket->recipient_seller_id ?? $ticket->author_seller_id,
                     ];
 
                     $isAnonymTicket = $ticket->recipient === 'anonym';
@@ -115,7 +125,7 @@ class TicketController extends \hipanel\base\CrudController
                         $client->name = $ticket->anonym_name;
                     }
 
-                    return array_merge(compact('client'), $this->prepareRefs());
+                    return array_merge(['client' => $client], $this->prepareRefs());
                 },
             ],
             'validate-form' => [
@@ -128,7 +138,7 @@ class TicketController extends \hipanel\base\CrudController
                     'save' => true,
                     'success' => [
                         'class' => RedirectAction::class,
-                        'url'   => function ($action) {
+                        'url' => function ($action) {
                             return $action->collection->count() > 1
                                 ? $action->controller->getSearchUrl()
                                 : $action->controller->getActionUrl('view', ['id' => $action->collection->first->getOldAttribute('id')]);
@@ -136,15 +146,13 @@ class TicketController extends \hipanel\base\CrudController
                     ],
                     'error' => [
                         'class' => RedirectAction::class,
-                    ]
+                    ],
                 ],
             ],
             'create' => [
                 'class' => SmartCreateAction::class,
                 'success' => Yii::t('hipanel:ticket', 'Ticket posted'),
-                'data' => function () {
-                    return $this->prepareRefs();
-                },
+                'data' => fn(): array => $this->prepareRefs(),
             ],
             'delete' => [
                 'class' => SmartPerformAction::class,
@@ -267,9 +275,11 @@ class TicketController extends \hipanel\base\CrudController
     /**
      * @return array
      */
-    protected function prepareRefs()
+    protected function prepareRefs(): array
     {
-        $state_data = array_merge(['all' => Yii::t('hipanel', 'Show all')], $this->getClassRefs('state', 'hipanel:ticket'));
+        $state_data = array_merge([Thread::DEFAULT_SHOW_ALL => Yii::t('hipanel', 'Show all')],
+            $this->getClassRefs('state', 'hipanel:ticket'));
+
         return [
             'topic_data' => $this->getRefs('topic,ticket', 'hipanel:ticket'),
             'state_data' => $state_data,
@@ -389,11 +399,11 @@ class TicketController extends \hipanel\base\CrudController
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
 
-        $result = ['id' => $id, 'answer_id' => $answer_id];
+        $result = ['id' => $id, 'answer_id' => $answer_id, 'csrf' => Yii::$app->request->csrfToken];
 
         try {
             $data = Thread::perform('get-last-answer-id', ['id' => $id, 'answer_id' => $answer_id]);
-            $result['answer_id'] = $data['answer_id'];
+            $result['answer_id'] = $data['answer_id'] ?? null;
             if ($data['answer_id'] > $answer_id) {
                 $dataProvider = (new ThreadSearch())->search([]);
                 $dataProvider->query->joinWith('answers');
@@ -424,13 +434,47 @@ class TicketController extends \hipanel\base\CrudController
         $client = Client::find()
             ->where(['id' => $id])
             ->joinWith('contact')
-            ->andWhere([
-                'with_servers_count' => 1,
-                'with_hosting_count' => 1,
-            ])
-            ->withDomains()
+            ->withServersCount()
+            ->withHostingCount()
+            ->withDomainsCount()
             ->one();
 
         return $this->renderAjax('_clientInfo', ['client' => $client]);
+    }
+
+    public function actionAnswerAndClose()
+    {
+        if ($this->request->isAjax) {
+            $ids = $this->request->get('selection');
+            $models = Thread::find()->where(['id_in' => $ids])->all();
+            $model = reset($models);
+            $model->scenario = 'answer-and-close';
+
+            return $this->renderAjax('modals/answer-and-close', ['model' => $model, 'models' => $models]);
+        }
+        $message = $this->request->post('message', false);
+        $formData = $this->request->post('Thread', false);
+        $answerPayload = [];
+        $closePayload = [];
+        foreach ($formData as $id => $data) {
+            $model = new Thread(['scenario' => 'answer-and-close']);
+            $model->setAttributes(array_merge($data, ['message' => $message, 'state' => Thread::STATE_CLOSE]));
+            if (!$model->validate()) {
+                return $this->asJson(ActiveForm::validate($model));
+            }
+            $answerPayload[$id] = array_filter($model->getAttributes(), fn($key) => $key !== 'state', ARRAY_FILTER_USE_KEY);
+            $model->message = null;
+            $closePayload[$id] = array_filter($model->getAttributes(), fn($key) => $key !== 'message', ARRAY_FILTER_USE_KEY);
+        }
+        try {
+            Thread::batchPerform('answer', $answerPayload);
+            Thread::batchPerform('answer', $closePayload);
+            $this->session->setFlash('success',
+                Yii::t('hipanel:ticket', '{0, plural, one{# ticket} other{# tickets}} have been answered and closed', count($formData)));
+        } catch (Exception $e) {
+            $this->session->setFlash('error', Yii::t('hipanel:ticket', 'The operation failed: {0}', $e->getMessage()));
+        }
+
+        return $this->redirect($this->request->referrer);
     }
 }
